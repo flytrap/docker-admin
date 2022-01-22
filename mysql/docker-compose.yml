@@ -1,0 +1,31 @@
+###########################################################
+## 1. 创建并启动容器:
+##       docker-compose -f services.yml up -d
+
+## 2. mysql:需要先进入容器,修改用户名密码: root root,执行如下:
+##  >>> docker exec -it mysql /bin/bash
+##  >>> CREATE DATABASE nats CHARACTER SET utf8;
+##  >>> mysql -e "delete from mysql.user where password='';grant all on *.* to root identified by 'root' with grant option;flush privileges;"
+
+## redis:   无密码
+## mongodb: 无用户名密码
+
+###########################################################
+version: '2'
+services:
+  mysql:
+    image: mysql/mysql-server:5.7.9
+    container_name: mysql
+    networks:
+      - flytrap
+    volumes:
+      - ./mysql/:/var/lib/mysql/
+    ports:
+      - 3306:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+      # - MYSQL_ROOT_HOST=172.*.*.*
+
+networks:
+      flytrap:
+        external: true

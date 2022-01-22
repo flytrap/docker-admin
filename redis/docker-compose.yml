@@ -1,0 +1,18 @@
+version: "3"
+services:
+  redis:
+    image: redis:6
+    container_name: redis
+    restart: always
+    networks:
+      - flytrap
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - 6379:6379
+    volumes:
+      - ./data:/data
+      - ./conf:/usr/local/etc/redis
+
+networks:
+  flytrap:
+    external: true

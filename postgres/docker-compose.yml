@@ -1,0 +1,25 @@
+############################################################
+## 1. 创建并启动容器:
+##       docker-compose -f postgresql.yml up -d
+
+# docker run --name postgresql -e POSTGRES_PASSWORD=123456 -e POSTGRES_USER=postgres -v /Users/flytrap/data/database/postgresql:/var/lib/postgresql --restart always -d -p 5432:5432 postgres
+###########################################################
+version: '2'
+services:
+  postgresql:
+      image: postgres:9.6
+      container_name: postgresql
+      networks:
+        - flytrap
+      restart: always
+      volumes:
+        - ./data:/var/lib/postgresql/data:rw
+      ports:
+        - 5432:5432
+      environment:
+        - POSTGRES_PASSWORD=123456
+        - POSTGRES_USER=postgres
+
+networks:
+  flytrap:
+    external: true
