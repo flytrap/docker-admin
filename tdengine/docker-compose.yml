@@ -1,0 +1,18 @@
+version: "3.5"
+services:
+  tdengine:
+    image: tdengine/tdengine:2.2.2.0
+    container_name: tdengine
+    hostname: tdengine
+    ports:
+      - 6030:6030
+      - 6035:6035
+      - 6041:6041
+      - 6030-6040:6030-6040/udp
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./data/lib:/var/lib/taos:Z
+      - ./data/log:/var/log/taos:Z
+    restart: unless-stopped
+    tty: true
