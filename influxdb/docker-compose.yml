@@ -1,0 +1,19 @@
+version: '2'
+services:
+  influxdb:
+    image: bitnami/influxdb:2
+    ports:
+      - 8086:8086
+      - 8088:8088
+    networks:
+      - flytrap
+    environment:
+      - INFLUXDB_ADMIN_USER_PASSWORD=admin123
+      - INFLUXDB_ADMIN_USER_TOKEN=admintoken123
+    volumes:
+      - ./data:/bitnami/influxdb
+    container_name: influxdb
+
+networks:
+  flytrap:
+    external: true
