@@ -1,0 +1,21 @@
+version: '2'
+
+services:
+  mongodb:
+    image: 'bitnami/mongodb:5.0'
+    networks:
+      - flytrap
+    ports:
+       - 27017:27017
+    environment:
+      - MONGODB_ROOT_PASSWORD=flytrap
+      - MONGODB_REPLICA_SET_KEY=flytrap
+      - MONGODB_USERNAME=flytrap
+      - MONGODB_PASSWORD=flytrap
+      - MONGODB_DATABASE=db
+    volumes:
+      - './data:/bitnami'
+
+networks:
+  flytrap:
+    external: true
