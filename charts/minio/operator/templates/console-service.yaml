@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: "console"
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "minio-operator.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  ports:
+  - name: http
+    port: 9090
+    nodePort: 30990
+  - name: https
+    port: 9443
+  selector:
+    {{- include "minio-operator.console-selectorLabels" . | nindent 4 }}
