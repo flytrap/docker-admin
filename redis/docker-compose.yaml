@@ -1,0 +1,12 @@
+version: "3"
+services:
+  system-redis:
+    image: bitnami/redis:7.2.4-debian-12-r9
+    container_name: system-redis
+    restart: always
+    environment:
+      - REDIS_PASSWORD=123456
+    ports:
+      - 6379:6379
+    volumes:
+      - ./system-data:/bitnami/redis/data

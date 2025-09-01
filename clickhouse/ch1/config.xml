@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+<clickhouse>
+    <logger>
+        <level>error</level>
+        <console>true</console>
+        <log remove="remove" />
+        <errorlog remove="remove" />
+    </logger>
+
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+    </query_log>
+    <replicated>
+        <!-- 其他配置 -->
+        <deduplicate>
+            <window>0</window> <!-- 将这里的值设置为0 -->
+        </deduplicate>
+    </replicated>
+    <user_directories>
+        <users_xml>
+            <path>/etc/clickhouse-server/users.xml</path>
+        </users_xml>
+    </user_directories>
+
+    <listen_host>0.0.0.0</listen_host>
+    <http_port>8123</http_port>
+    <tcp_port>9000</tcp_port>
+    <interserver_http_host>ch1</interserver_http_host>
+    <interserver_http_port>9009</interserver_http_port>
+    <user_defined_executable_functions_config>*_function.xml</user_defined_executable_functions_config>
+
+    <max_connections>4096</max_connections>
+    <keep_alive_timeout>3</keep_alive_timeout>
+    <max_concurrent_queries>100</max_concurrent_queries>
+    <uncompressed_cache_size>8589934592</uncompressed_cache_size>
+    <mark_cache_size>5368709120</mark_cache_size>
+
+    <path>/var/lib/clickhouse/</path>
+    <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
+    <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+
+    <users_config>/etc/clickhouse-server/users.xml</users_config>
+    <default_profile>default</default_profile>
+    <default_database>default</default_database>
+    <mlock_executable>false</mlock_executable>
+    <timezone>Asia/Kuala_Lumpur</timezone>
+    <remote_servers>
+        <gamestat>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch1</host>
+                    <port>9000</port>
+                    <user>default</user>
+                    <password>journey</password>
+                </replica>
+            </shard>
+            <shard>
+                <internal_replication>true</internal_replication>
+                <replica>
+                    <host>ch2</host>
+                    <port>9000</port>
+                    <user>default</user>
+                    <password>journey</password>
+                </replica>
+            </shard>
+        </gamestat>
+    </remote_servers>
+
+    <zookeeper>
+        <node index="1">
+            <host>clickhouse-keeper</host>
+            <port>9181</port>
+        </node>
+    </zookeeper>
+    <macros>
+        <cluster>gamestat</cluster>
+        <shard>1</shard>
+        <replica>ch1</replica>
+    </macros>
+
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl</path>
+    </distributed_ddl>
+
+    <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
+</clickhouse>
+

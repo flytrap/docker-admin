@@ -1,0 +1,34 @@
+<functions>
+    <function>
+        <type>executable</type>
+        <name>alarm_send</name>
+        <return_type>String</return_type>
+        <return_name>result</return_name>
+        <argument>
+            <type>String</type>
+            <name>url</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>token</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>subject</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>content</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>to</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>type</name>
+        </argument>
+        <format>JSONEachRow</format>
+        <command>alarm_send.py</command>
+    </function>
+</functions>

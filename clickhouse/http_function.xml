@@ -1,0 +1,22 @@
+<functions>
+    <function>
+        <type>executable</type>
+        <name>http_send</name>
+        <return_type>String</return_type>
+        <return_name>result</return_name>
+        <argument>
+            <type>String</type>
+            <name>url</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>method</name>
+        </argument>
+        <argument>
+            <type>String</type>
+            <name>params</name>
+        </argument>
+        <format>JSONEachRow</format>
+        <command>http_send.py</command>
+    </function>
+</functions>

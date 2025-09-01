@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  s3-web-browser:
+    image: romanzdk/s3-web-browser:latest-arm
+    container_name: s3-web-browser
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: adminpassword
+      AWS_DEFAULT_REGION: ap-southeast-2 # 可选，如 us-east-1
+      AWS_ENDPOINT_URL: https://s3.ap-southeast-2.amazonaws.com # 可选，用于私有或兼容 S3
+      DEFAULT_BUCKET: pvc-cdc0262a-7a1a-49fb-8bfd-fed00e134d23
+    command: gunicorn --bind 0.0.0.0:8000 run:app

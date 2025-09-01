@@ -1,0 +1,110 @@
+version: "3.8"
+
+networks:
+  pgnet:
+
+services:
+  db1:
+    image: bitnami/postgresql:v17
+    container_name: db1
+    restart: always
+    environment:
+      # 基础账号
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESL_USER=postgres            # 兼容老变量名（无害）
+      - POSTGRESQL_PASSWORD=postgres
+      - POSTGRESQL_DATABASE=managerdb
+      # 主库（primary）+ 复制账户
+      - POSTGRESQL_REPLICATION_MODE=master
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_pass
+      - POSTGRESQL_SHARED_PRELOAD_LIBRARIES=pg_cron,pg_net
+      # 可选：开启同步复制（按需）
+      # - POSTGRESQL_SYNCHRONOUS_COMMIT=on
+      # - POSTGRESQL_NUM_SYNCHRONOUS_REPLICAS=1
+    volumes:
+      - ./data/postgres1:/bitnami/postgresql
+      # 初始化脚本：创建 srcheck 账号（用于 Pgpool-II 延迟检查）
+      - ./initdb:/docker-entrypoint-initdb.d
+      - ./custom-postgresql.conf:/bitnami/postgresql/conf/conf.d/custom-postgresql.conf
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # test: [ "CMD-SHELL", "/opt/bitnami/scripts/postgresql/healthcheck.sh" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [ pgnet ]
+
+  db2:
+    image: bitnami/postgresql:v17
+    container_name: db2
+    restart: always
+    environment:
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=postgres
+      - POSTGRESQL_DATABASE=managerdb
+      # 从库（replica）配置，指向主库
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_pass
+      - POSTGRESQL_MASTER_HOST=db1
+      - POSTGRESQL_MASTER_PORT_NUMBER=5432
+      - POSTGRESQL_SHARED_PRELOAD_LIBRARIES=pg_cron,pg_net
+    volumes:
+      - ./data/postgres2:/bitnami/postgresql
+      - ./custom-postgresql.conf:/bitnami/postgresql/conf/conf.d/custom-postgresql.conf
+    depends_on:
+      db1:
+        condition: service_healthy
+    ports:
+      - "5433:5432"
+    healthcheck:
+      # test: [ "CMD-SHELL", "/opt/bitnami/scripts/postgresql/healthcheck.sh" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [ pgnet ]
+
+  pgpool:
+    image: bitnami/pgpool:4
+    container_name: pgpool
+    restart: always
+    environment:
+      # 后端节点（ID:主机名:端口）
+      - PGPOOL_BACKEND_NODES=0:db1:5432,1:db2:5432
+
+      # Pgpool 连接 Postgres 的账户（必须存在于两端）
+      - PGPOOL_POSTGRES_USERNAME=postgres
+      - PGPOOL_POSTGRES_PASSWORD=postgres
+
+      # 延迟检查（避免 sr_check_worker 报错）
+      - PGPOOL_SR_CHECK_USER=srcheck
+      - PGPOOL_SR_CHECK_PASSWORD=srcheckpass
+      - PGPOOL_SR_CHECK_DATABASE=postgres
+
+      # 读写分离
+      - PGPOOL_ENABLE_LOAD_BALANCING=yes
+
+      # 管理员（用于 Pgpool 管理命令）
+      - PGPOOL_ADMIN_USERNAME=admin
+      - PGPOOL_ADMIN_PASSWORD=adminpass
+
+      # 可选：启用自动故障切换（生产建议结合脚本/仲裁）
+      # - PGPOOL_ENABLE_AUTO_FAILOVER=yes
+    ports:
+      - "9999:5432"     # 客户端通过本机 9999 连接 Pgpool-II
+    depends_on:
+      db1:
+        condition: service_healthy
+      db2:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/bitnami/scripts/pgpool/healthcheck.sh" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [ pgnet ]
+

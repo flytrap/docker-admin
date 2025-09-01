@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  # Keeper（类似于Zookeeper，负责协调分布式表的复制）
+  clickhouse-keeper:
+    image: clickhouse/clickhouse-keeper:24.12
+    container_name: keeper
+    restart: always
+    user: "101:101"
+    ports:
+      - "9181:9181"   # keeper client端口
+      - "9281:9281"   # keeper server端口
+    command: >
+      bash -c "
+      clickhouse-keeper --config-file /etc/clickhouse-keeper/config.xml
+      "
+    volumes:
+      - ./keeper/config.xml:/etc/clickhouse-keeper/config.xml
+      - ./keeper/data:/var/lib/clickhouse-keeper
+      - ./keeper/log:/var/log/clickhouse-keeper
+
+  # ClickHouse 节点 1
+  clickhouse1:
+    image: clickhouse/clickhouse-server:24.12
+    container_name: ch1
+    restart: always
+    user: "101:101"
+    depends_on:
+      - clickhouse-keeper
+    ports:
+      - "8123:8123"   # HTTP
+      - "9000:9000"   # TCP
+    volumes:
+      - ./ch1/config.xml:/etc/clickhouse-server/config.xml
+      - ./users.xml:/etc/clickhouse-server/users.xml
+      - ./http_function.xml:/etc/clickhouse-server/http_function.xml
+      - ./alarm_function.xml:/etc/clickhouse-server/alarm_function.xml
+      - ./user_scripts:/var/lib/clickhouse/user_scripts
+      # - ./ch1/data:/var/lib/clickhouse
+
+  # ClickHouse 节点 2
+  clickhouse2:
+    image: clickhouse/clickhouse-server:24.12
+    container_name: ch2
+    restart: always
+    user: "101:101"
+    depends_on:
+      - clickhouse-keeper
+    ports:
+      - "8124:8123"   # HTTP (避免和 ch1 冲突)
+      - "9001:9000"   # TCP (避免和 ch1 冲突)
+    volumes:
+      - ./ch2/config.xml:/etc/clickhouse-server/config.xml
+      - ./users.xml:/etc/clickhouse-server/users.xml
+      - ./http_function.xml:/etc/clickhouse-server/http_function.xml
+      - ./alarm_function.xml:/etc/clickhouse-server/alarm_function.xml
+      - ./user_scripts:/var/lib/clickhouse/user_scripts
+      # - ./ch2/data:/var/lib/clickhouse
+
