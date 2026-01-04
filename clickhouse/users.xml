@@ -28,6 +28,7 @@
             <networks>
                 <ip>::/0</ip>
             </networks>
+            <access_management>1</access_management>
         </gamedba>
     </users>
 
