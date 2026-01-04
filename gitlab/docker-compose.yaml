@@ -1,0 +1,22 @@
+version: '3.3'
+services:
+  gitlab:
+    image: 'gitlab/gitlab-ce:14.6.1-ce.0'
+    container_name: "gitlab"
+    restart: always
+    privileged: true
+    hostname: 'gitlab'
+    environment:
+      TZ: 'Asia/Shanghai'
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://git.example.com'
+    ports:
+      - '3001:80'
+      - '81:80'
+      - '444:443'
+      - '2223:22'
+    volumes:
+      - './etc:/etc/gitlab'
+      - './log:/var/log/gitlab'
+      - './opt:/var/opt/gitlab'
+
