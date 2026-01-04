@@ -1,0 +1,59 @@
+version: '3.3'
+services:
+  gitlab:
+    image: 'gitlab/gitlab-ce:17.11.2-ce.0'
+    container_name: "gitlab"
+    restart: always
+    privileged: true
+    hostname: 'gitlab'
+    environment:
+      TZ: 'Asia/Shanghai'
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://192.168.110.37'
+    ports:
+      - '3000:80'
+      - '80:80'
+      - '8443:443'
+      - '22:22'
+    volumes:
+      - './etc:/etc/gitlab'
+      - './log:/var/log/gitlab'
+      - './opt:/var/opt/gitlab'
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 8G
+  gitlab-runner:
+    image: gitlab/gitlab-runner:v17.11.2
+    container_name: gitlab-runner
+    restart: always
+    volumes:
+      - '/usr/bin/docker:/usr/bin/docker'
+      - './gitlab-runner/config:/etc/gitlab-runner'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    environment:
+      - DOCKER_HOST=tcp://docker:2375
+      - DOCKER_TLS_CERTDIR=
+      - DOCKER_API_VERSION=1.43
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 6G
+    depends_on:
+      - docker
+  docker:
+    image: docker:24.0.9-dind
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=
+    volumes:
+      - ./docker-data:/var/lib/docker
+      - /etc/docker/daemon.json:/etc/docker/daemon.json
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: 6G
