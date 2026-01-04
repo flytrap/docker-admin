@@ -1,0 +1,24 @@
+version: '3.0'
+
+services:
+
+  # 禅道（你自己的容器名称）
+  behelpful-zentao:
+    image: easysoft/zentao
+    container_name: zentao
+    ports:
+      - '80:80'
+      - '3306:3306'
+
+    # 数据持久化挂载宿主机：格式： 宿主机路径目录：容器内部目录
+    # 容器内部的不用动，宿主机中的可根据自己需求修改，支持绝对路径和相对路径
+    volumes:
+      - './zentao/data:/www/zentaopms'
+      - './zentao/mysql:/var/lib/mysql'
+
+    # 禅道数据库MySQL root 用户密码设置（这里设置了，感觉无效，启动时依然警告：Access denied for user 'root'@'localhost' (using password: NO)）
+    # 启动引导界面还会让你设置一次 数据库 MySQL 的 用户和密码
+    environment:
+      # 数据库密码
+      - MYSQL_ROOT_PASSWORD=zentao-flytrap
+

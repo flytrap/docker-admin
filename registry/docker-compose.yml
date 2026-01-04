@@ -14,3 +14,11 @@ services:
     #- "STANDALONE=true"
     #- "MIRROR_SOURCE=https://registry-1.docker.io"
     #- "MIRROR_SOURCE_INDEX=https://index.docker.io"
+  web:
+    image: konradkleine/docker-registry-frontend:v2
+    restart: always
+    ports:
+    - 80:80
+    environment:
+    - ENV_DOCKER_REGISTRY_HOST=192.168.1.143
+    - ENV_DOCKER_REGISTRY_PORT=5000

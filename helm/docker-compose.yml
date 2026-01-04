@@ -1,0 +1,15 @@
+version: '3'
+services:
+  chartmuseum:
+    image: 'chartmuseum/chartmuseum:latest'
+    container_name: "chartmuseum"
+    restart: always
+    privileged: true
+    environment:
+      STORAGE: local
+      STORAGE_LOCAL_ROOTDIR: /charts
+    ports:
+      - '8080:8080'
+    volumes:
+      - './charts:/charts'
+
