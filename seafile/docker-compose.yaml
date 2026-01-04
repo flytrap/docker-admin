@@ -1,0 +1,125 @@
+version: '3.6'
+
+services:
+  db:
+    image: mariadb:10.11
+    container_name: seafile-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=flytrap-flytrap.com
+      - MYSQL_LOG_CONSOLE=true
+    volumes:
+      - ./data/db:/var/lib/mysql
+    ports:
+      - 3306:3306
+    networks:
+      - seafile-net
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  memcached:
+    image: memcached:1.6
+    container_name: seafile-memcached
+    restart: unless-stopped
+    entrypoint: memcached -m 256
+    networks:
+      - seafile-net
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  seafile:
+    image: seafileltd/seafile-mc:12.0.11
+    container_name: seafile
+    privileged: true
+    restart: unless-stopped
+    ports:
+      - "81:80"
+      - "8000:8000"
+      - "444:443"
+    volumes:
+      - ./data/seafile:/shared
+    environment:
+      - SEAFILE_ADMIN_PASSWORD=flytrap@admin.com
+      - DB_HOST=db
+      - DB_ROOT_PASSWD=flytrap-flytrap.com
+      - SEAFILE_ADMIN_EMAIL=flytrap@flytrap.com
+      - SEAFILE_SERVER_HOSTNAME=seafile.example.com
+      - SEAFILE_SERVER_LEFSENCRYPT=false
+      - JWT_PRIVATE_KEY=jijdisdsdsdd
+    depends_on:
+      - memcached
+      - db
+      - sdoc-server
+      - onlyoffice-documentserver
+    networks:
+      - seafile-net
+      - ldap-net  # Remove this network if LDAP is not used
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Remove this section if you do not want to use only office integration
+  onlyoffice-documentserver:
+    # image: onlyoffice/documentserver:8.0.1-flytrap
+    image: onlyoffice/documentserver:8.2.3
+    restart: unless-stopped
+    container_name: onlyoffice
+    privileged: true
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=seafile
+
+    ports:
+      - "8889:80"
+    volumes:
+               # Optional: see https://manual.seafile.com/deploy/only_office/
+      - ./data/onlyoffice/log:/var/log/onlyoffice
+      - ./data/onlyoffice/data:/var/www/onlyoffice/Data
+      - ./data/onlyoffice/lib:/var/lib/onlyoffice
+      - ./data/onlyoffice/db:/var/lib/postgresql
+        # - ./data/onlyoffice/local.json:/etc/onlyoffice/documentserver/local.json
+    networks:
+      - seafile-net
+        # logging:
+        #   options:
+        #     max-size: "10m"
+        #     max-file: "3"
+  sdoc-server:
+    # image: seafileltd/sdoc-server:0.5.0
+    image: seafileltd/sdoc-server:1.0.5
+    container_name: sdoc-server
+    restart: unless-stopped
+    ports:
+      # - 8888:80
+      # - 443:443
+      - 7070:7070
+      - 8888:8888
+    volumes:
+      - ./data/seafile/sdoc-data/:/shared
+    networks:
+      - seafile-net
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWD=flytrap-flytrap.com # Requested, password of MySQL service.
+      - DB_NAME=sdoc_db
+      - TIME_ZONE=Asia/Shanghai
+      - SDOC_SERVER_LETSENCRYPT=false # Whether to use https or not.
+      - SEAHUB_SERVICE_URL=http://seafile.example.com
+
+networks:
+  seafile-net:
+    name: seafile-net
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.32.0.0/16
+  ldap-net:  # Remove this network if LDAP is not used
+    external: true
+    name: ldap-net
