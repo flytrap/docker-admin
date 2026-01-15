@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  teleport:
+    image: public.ecr.aws/gravitational/teleport-distroless:17.6.0
+    container_name: teleport
+    hostname: teleport
+    restart: always
+    volumes:
+      - ./config:/etc/teleport
+      - ./data:/var/lib/teleport
+    ports:
+      - "3025:3025"   # Auth Service
+      - "3080:3080"   # Web UI (HTTP)
+      - "443:443"     # HTTPS (public access, optional)
+
