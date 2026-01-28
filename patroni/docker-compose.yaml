@@ -1,0 +1,230 @@
+networks:
+  pg-net:
+    driver: bridge
+
+services:
+  etcd:
+    image: patroni:v4.1.0
+    container_name: etcd
+    environment:
+      ETCD_NAME: etcd
+      ETCD_DATA_DIR: /etcd-data
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd:2380
+      ETCD_INITIAL_CLUSTER: etcd=http://etcd:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: tutorial
+    command: etcd
+    volumes:
+      - ./data/etcd:/etcd-data
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD-SHELL", "etcdctl --endpoints=http://localhost:2379 endpoint health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  patroni1:
+    image: patroni:v4.1.0
+    container_name: patroni1
+    hostname: patroni1
+    environment:
+      PATRONI_SCOPE: pg-cluster
+      PATRONI_NAMESPACE: /service/
+      # 强制使用 etcd3，避免镜像默认的 etcd v2（v2 的 key 在 etcdctl v3 中不可见）
+      PATRONI_ETCD3_HOSTS: etcd:2379
+    volumes:
+      - ./patroni/patroni1.yml:/config/patroni.yml
+      - ./data/pg1:/data
+    command: patroni /config/patroni.yml
+    depends_on:
+      etcd:
+        condition: service_healthy
+    networks: [pg-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8008/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  patroni2:
+    image: patroni:v4.1.0
+    container_name: patroni2
+    hostname: patroni2
+    environment:
+      PATRONI_SCOPE: pg-cluster
+      PATRONI_NAMESPACE: /service/
+      PATRONI_ETCD3_HOSTS: etcd:2379
+    volumes:
+      - ./patroni/patroni2.yml:/config/patroni.yml
+      - ./data/pg2:/data
+    command: patroni /config/patroni.yml
+    depends_on:
+      etcd:
+        condition: service_healthy
+      patroni1:
+        condition: service_healthy
+    networks: [pg-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8008/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  patroni3:
+    image: patroni:v4.1.0
+    container_name: patroni3
+    hostname: patroni3
+    environment:
+      PATRONI_SCOPE: pg-cluster
+      PATRONI_NAMESPACE: /service/
+      PATRONI_ETCD3_HOSTS: etcd:2379
+    volumes:
+      - ./patroni/patroni3.yml:/config/patroni.yml
+      - ./data/pg3:/data
+    command: patroni /config/patroni.yml
+    depends_on:
+      etcd:
+        condition: service_healthy
+      patroni1:
+        condition: service_healthy
+    networks: [pg-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8008/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  haproxy:
+    image: patroni:v4.1.0
+    container_name: haproxy
+    entrypoint: []
+    command: ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "5000:5000"     # 写入口（主节点）
+      - "5001:5001"     # 读入口（所有节点）
+      - "8404:8404"     # HAProxy 统计页面
+    depends_on:
+      patroni1:
+        condition: service_healthy
+      patroni2:
+        condition: service_healthy
+      patroni3:
+        condition: service_healthy
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  pgbouncer:
+    image: bitnami/pgbouncer
+    container_name: pgbouncer
+    environment:
+      PGBOUNCER_AUTH_TYPE: md5
+      PGBOUNCER_AUTH_USER: postgres
+      PGBOUNCER_AUTH_PASSWORD: ${PGBOUNCER_AUTH_PASSWORD:-flytrap}
+      # ===== 基本 =====
+      PGBOUNCER_LISTEN_PORT: 6432
+      PGBOUNCER_POOL_MODE: transaction
+
+      # ===== 后端（只连 HAProxy）=====
+      POSTGRESQL_HOST: haproxy
+      POSTGRESQL_PORT: 5000
+      POSTGRESQL_DATABASE: postgres
+
+      # ===== 认证 =====
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD:-flytrap}
+
+      # ===== 连接池 =====
+      PGBOUNCER_MAX_CLIENT_CONN: 2000
+      PGBOUNCER_DEFAULT_POOL_SIZE: 50
+      PGBOUNCER_RESERVE_POOL_SIZE: 20
+
+      # ===== 稳定性（非常重要）=====
+      PGBOUNCER_SERVER_LIFETIME: 300
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 60
+      PGBOUNCER_SERVER_RESET_QUERY: "DISCARD ALL"
+
+      # ===== 日志 =====
+      PGBOUNCER_LOG_CONNECTIONS: 1
+      PGBOUNCER_LOG_DISCONNECTIONS: 1
+    ports:
+      - "6432:6432"
+    depends_on:
+      haproxy:
+        condition: service_healthy
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M

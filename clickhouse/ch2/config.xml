@@ -57,7 +57,7 @@
                     <host>ch1</host>
                     <port>9000</port>
                     <user>default</user>
-                    <password>journey</password>
+                    <password>flytrap</password>
                 </replica>
             </shard>
             <shard>
@@ -66,7 +66,7 @@
                     <host>ch2</host>
                     <port>9000</port>
                     <user>default</user>
-                    <password>journey</password>
+                    <password>flytrap</password>
                 </replica>
             </shard>
         </gamestat>

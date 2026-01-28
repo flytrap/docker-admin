@@ -16,7 +16,7 @@
     </materialized_postgresql>
     <users>
         <default>
-            <password>journey</password>
+            <password>flytrap</password>
             <profile>default</profile>
             <networks>
                 <ip>::/0</ip>
