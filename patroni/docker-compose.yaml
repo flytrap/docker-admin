@@ -177,7 +177,7 @@ services:
     image: bitnami/pgbouncer
     container_name: pgbouncer
     environment:
-      PGBOUNCER_AUTH_TYPE: md5
+      PGBOUNCER_AUTH_TYPE: scram-sha-256
       PGBOUNCER_AUTH_USER: postgres
       PGBOUNCER_AUTH_PASSWORD: ${PGBOUNCER_AUTH_PASSWORD:-flytrap}
       # ===== 基本 =====

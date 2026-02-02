@@ -1,0 +1,5 @@
+.env
+data/
+patroni/patroni.yml
+keepalived/keepalived.conf
+haproxy/haproxy.cfg

@@ -1,0 +1,172 @@
+# Patroni-Stack 单节点编排
+# 每台物理机部署一份，通过 .env 区分 NODE_ID / NODE_IP
+# 包含：etcd、patroni、haproxy、pgbouncer、keepalived
+
+networks:
+  pg-net:
+    driver: bridge
+
+services:
+  etcd:
+    image: ${PATRONI_IMAGE:-patroni:v4.1.0}
+    container_name: etcd
+    hostname: etcd${NODE_ID}
+    environment:
+      ETCD_NAME: etcd${NODE_ID}
+      ETCD_DATA_DIR: /etcd-data
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://${NODE_IP}:2379
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://${NODE_IP}:2380
+      ETCD_INITIAL_CLUSTER: ${ETCD_INITIAL_CLUSTER:-etcd1=http://${NODE1_IP}:2380,etcd2=http://${NODE2_IP}:2380,etcd3=http://${NODE3_IP}:2380}
+      ETCD_INITIAL_CLUSTER_STATE: ${ETCD_INITIAL_CLUSTER_STATE:-new}
+      ETCD_INITIAL_CLUSTER_TOKEN: patroni-stack
+    command: etcd
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    volumes:
+      - ./data/etcd:/etcd-data
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD-SHELL", "ETCDCTL_API=3 etcdctl --endpoints=http://localhost:2379 endpoint health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  patroni:
+    image: ${PATRONI_IMAGE:-patroni:v4.1.0}
+    container_name: patroni
+    hostname: patroni${NODE_ID}
+    # 覆盖镜像 ENTRYPOINT，否则 command 会变成 patroni.py 的参数，启动脚本不会执行
+    entrypoint: ["sh", "-c"]
+    env_file:
+      - ./patroni/patroni.env
+    # 不传 PATRONI_*_CONNECT_ADDRESS，避免合并时被错误 env 覆盖；启动脚本用 patroni.env 的 NODE_IP 重写 yml 再启动
+    environment:
+      PATRONI_SCOPE: pg-cluster
+      PATRONI_NAMESPACE: /service/
+      PATRONI_ETCD3_HOSTS: ${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379
+      ETCD_HOSTS: ${NODE1_IP}:2379,${NODE2_IP}:2379,${NODE3_IP}:2379
+    ports:
+      - "5432:5432"
+      - "8008:8008"
+    volumes:
+      - ./patroni/patroni.yml:/config/patroni.yml:ro
+      - ./patroni/patroni.env:/config/patroni.env:ro
+      - ./data/pg:/home/postgres/pgdata
+    # entrypoint 为 sh -c，command 仅一段脚本（勿再写 sh -c，否则会变成 sh -c "sh" 立即退出）
+    command:
+      - |
+        set -e
+        set -a && . /config/patroni.env 2>/dev/null || true && set +a
+        [ -n "$${NODE_IP}" ] || { echo "NODE_IP empty in patroni.env"; exit 1; }
+        cp /config/patroni.yml /tmp/patroni.yml
+        sed -i -e "s|connect_address: .*:8008|connect_address: $${NODE_IP}:8008|" -e "s|connect_address: .*:5432|connect_address: $${NODE_IP}:5432|" /tmp/patroni.yml
+        unset PATRONI_POSTGRESQL_CONNECT_ADDRESS PATRONI_RESTAPI_CONNECT_ADDRESS
+        exec python3 /patroni.py /tmp/patroni.yml
+    depends_on:
+      etcd:
+        condition: service_healthy
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8008/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  haproxy:
+    image: ${PATRONI_IMAGE:-patroni:v4.1.0}
+    container_name: haproxy
+    entrypoint: []
+    command: ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+      - "8404:8404"
+    depends_on:
+      patroni:
+        condition: service_healthy
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  pgbouncer:
+    image: ${PGBOUNCER_IMAGE:-bitnami/pgbouncer}
+    container_name: pgbouncer
+    environment:
+      PGBOUNCER_AUTH_TYPE: scram-sha-256
+      PGBOUNCER_AUTH_USER: postgres
+      PGBOUNCER_AUTH_PASSWORD: ${PGBOUNCER_AUTH_PASSWORD:-flytrap}
+      PGBOUNCER_LISTEN_PORT: 6432
+      PGBOUNCER_POOL_MODE: transaction
+      POSTGRESQL_HOST: haproxy
+      POSTGRESQL_PORT: 5000
+      POSTGRESQL_DATABASE: postgres
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD:-flytrap}
+      PGBOUNCER_MAX_CLIENT_CONN: 2000
+      PGBOUNCER_DEFAULT_POOL_SIZE: 50
+      PGBOUNCER_RESERVE_POOL_SIZE: 20
+      PGBOUNCER_SERVER_LIFETIME: 300
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 60
+      PGBOUNCER_SERVER_RESET_QUERY: "DISCARD ALL"
+      PGBOUNCER_LOG_CONNECTIONS: 1
+      PGBOUNCER_LOG_DISCONNECTIONS: 1
+    ports:
+      - "6432:6432"
+    depends_on:
+      haproxy:
+        condition: service_healthy
+    networks:
+      - pg-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 6432 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  keepalived:
+    image: osixia/keepalived:stable
+    container_name: keepalived
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+    volumes:
+      - ./keepalived/keepalived.conf:/etc/keepalived/keepalived.conf:ro
+      - ./keepalived/check_haproxy.sh:/etc/keepalived/check_haproxy.sh:ro
+    # 覆盖镜像默认的 run 包装脚本，直接执行 keepalived（该镜像 ENTRYPOINT 不接收 -f/--dont-fork 等参数）
+    entrypoint: ["keepalived"]
+    command: ["-f", "/etc/keepalived/keepalived.conf", "--dont-fork"]
+    depends_on:
+      - haproxy
+    restart: unless-stopped
+    profiles:
+      - with-vip
