@@ -11,6 +11,7 @@ etcd3:
   hosts: ${ETCD_HOSTS}
 
 bootstrap:
+  post_init: /config/init-extensions.sh
   dcs:
     ttl: 30
     loop_wait: 10
@@ -28,6 +29,8 @@ postgresql:
   data_dir: /home/postgres/pgdata/data
   use_pg_rewind: true
   parameters:
+    shared_preload_libraries: 'pg_stat_statements,pg_cron,pg_net'
+    cron.database_name: managerdb
     password_encryption: scram-sha-256
     max_connections: 100
     shared_buffers: 256MB

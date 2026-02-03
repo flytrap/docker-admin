@@ -8,7 +8,7 @@ networks:
 
 services:
   etcd:
-    image: ${PATRONI_IMAGE:-patroni:v4.1.0}
+    image: ${PATRONI_IMAGE:-patroni:v4.1.0.1}
     container_name: etcd
     hostname: etcd${NODE_ID}
     environment:
@@ -43,7 +43,7 @@ services:
           memory: 512M
 
   patroni:
-    image: ${PATRONI_IMAGE:-patroni:v4.1.0}
+    image: ${PATRONI_IMAGE:-patroni:v4.1.0.1}
     container_name: patroni
     hostname: patroni${NODE_ID}
     # 覆盖镜像 ENTRYPOINT，否则 command 会变成 patroni.py 的参数，启动脚本不会执行
@@ -62,6 +62,7 @@ services:
     volumes:
       - ./patroni/patroni.yml:/config/patroni.yml:ro
       - ./patroni/patroni.env:/config/patroni.env:ro
+      - ./patroni/init-extensions.sh:/config/init-extensions.sh:ro
       - ./data/pg:/home/postgres/pgdata
     # entrypoint 为 sh -c，command 仅一段脚本（勿再写 sh -c，否则会变成 sh -c "sh" 立即退出）
     command:
@@ -92,7 +93,7 @@ services:
           memory: 2G
 
   haproxy:
-    image: ${PATRONI_IMAGE:-patroni:v4.1.0}
+    image: ${PATRONI_IMAGE:-patroni:v4.1.0.1}
     container_name: haproxy
     entrypoint: []
     command: ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]
@@ -114,28 +115,15 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # 使用自定义 pgbouncer.ini 时请用默认镜像 edoburu/pgbouncer；若 .env 中 PGBOUNCER_IMAGE=bitnami/pgbouncer 会校验 POSTGRESQL_PASSWORD
   pgbouncer:
-    image: ${PGBOUNCER_IMAGE:-bitnami/pgbouncer}
+    image: ${PGBOUNCER_IMAGE:-edoburu/pgbouncer:v1.24.1-p1}
     container_name: pgbouncer
     environment:
-      PGBOUNCER_AUTH_TYPE: scram-sha-256
-      PGBOUNCER_AUTH_USER: postgres
-      PGBOUNCER_AUTH_PASSWORD: ${PGBOUNCER_AUTH_PASSWORD:-flytrap}
-      PGBOUNCER_LISTEN_PORT: 6432
-      PGBOUNCER_POOL_MODE: transaction
-      POSTGRESQL_HOST: haproxy
-      POSTGRESQL_PORT: 5000
-      POSTGRESQL_DATABASE: postgres
-      POSTGRESQL_USERNAME: postgres
       POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD:-flytrap}
-      PGBOUNCER_MAX_CLIENT_CONN: 2000
-      PGBOUNCER_DEFAULT_POOL_SIZE: 50
-      PGBOUNCER_RESERVE_POOL_SIZE: 20
-      PGBOUNCER_SERVER_LIFETIME: 300
-      PGBOUNCER_SERVER_IDLE_TIMEOUT: 60
-      PGBOUNCER_SERVER_RESET_QUERY: "DISCARD ALL"
-      PGBOUNCER_LOG_CONNECTIONS: 1
-      PGBOUNCER_LOG_DISCONNECTIONS: 1
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
     ports:
       - "6432:6432"
     depends_on:

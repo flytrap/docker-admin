@@ -38,8 +38,9 @@ patroni-stack/
 ├── deploy.sh             # 一键部署脚本（每台执行一次，Node1 先执行）
 ├── docker-compose.yaml   # 单节点编排（etcd + patroni + haproxy + pgbouncer + keepalived）
 ├── patroni/
-│   ├── patroni.yml.tpl   # Patroni 配置模板
-│   └── patroni.yml       # 由 scripts/gen-patroni.sh 生成
+│   ├── patroni.yml.tpl   # Patroni 配置模板（含 shared_preload_libraries、post_init）
+│   ├── patroni.yml       # 由 scripts/gen-patroni.sh 生成
+│   └── init-extensions.sh # bootstrap 后在 managerdb 中创建扩展：plsh, postgres_fdw, pg_net, pg_cron, pg_stat_statements
 ├── haproxy/
 │   ├── haproxy.cfg.tpl   # HAProxy 配置模板（后端为三节点 IP）
 │   └── haproxy.cfg       # 由 scripts/gen-haproxy.sh 生成
@@ -47,11 +48,15 @@ patroni-stack/
 │   ├── keepalived.conf.tpl   # Keepalived 配置模板
 │   ├── keepalived.conf       # 由 scripts/gen-keepalived.sh 生成
 │   └── check_haproxy.sh      # VIP 持有条件：本机 HAProxy 存活
+├── pgbouncer/
+│   ├── pgbouncer.ini     # PgBouncer 配置（[databases] managerdb、postgres → haproxy:5000）
+│   └── userlist.txt      # 由 scripts/gen-pgbouncer.sh 生成（不入库）
 ├── scripts/
 │   ├── bootstrap.sh      # 本机初始化（生成配置 + 建目录）
 │   ├── gen-patroni.sh    # 生成 patroni/patroni.yml
 │   ├── gen-haproxy.sh    # 生成 haproxy/haproxy.cfg（支持 3～6 节点）
 │   ├── gen-keepalived.sh # 生成 keepalived/keepalived.conf（支持 NODE_ID 1～6）
+│   ├── gen-pgbouncer.sh  # 生成 pgbouncer/userlist.txt
 │   ├── build-etcd-initial-cluster.sh # 输出 ETCD_INITIAL_CLUSTER（扩展节点时在新节点 .env 使用）
 │   └── reset-etcd-node1.sh          # Node1 专用：etcd 单节点重新引导（修复 unhealthy cluster）
 └── data/                 # 本机数据（etcd、PostgreSQL）
@@ -114,6 +119,10 @@ cp .env.example .env
 ```
 
 会生成 `patroni/patroni.yml`、`haproxy/haproxy.cfg`、`keepalived/keepalived.conf` 并创建 `data/etcd`、`data/pg`。
+
+#### PostgreSQL 扩展（plsh / postgres_fdw / pg_net / pg_cron / pg_stat_statements）
+
+模板已启用上述 5 个扩展：`patroni.yml.tpl` 中配置了 `shared_preload_libraries: pg_stat_statements,pg_cron,pg_net`，并在 bootstrap 后通过 `post_init` 执行 `patroni/init-extensions.sh`，在默认数据库 **managerdb** 中创建扩展（脚本会先创建 `managerdb` 再安装扩展）。**postgres_fdw** 与 **pg_stat_statements** 来自 PostgreSQL 官方 contrib；**plsh**、**pg_net**、**pg_cron** 需使用带插件的镜像：在 `docker/` 下构建 `Dockerfile.plugin`，并在 `.env` 中设置 `PATRONI_IMAGE=<你的插件镜像>` 后重新 `./scripts/bootstrap.sh` 并启动。PGBouncer 使用自定义配置 `pgbouncer/pgbouncer.ini`（显式 [databases] managerdb、postgres → haproxy:5000），`pgbouncer/userlist.txt` 由 `./scripts/gen-pgbouncer.sh` 根据 `.env` 中 `POSTGRESQL_PASSWORD` 生成，部署前需执行 `./scripts/bootstrap.sh` 以生成该文件。
 
 ### 4. 启动 etcd 集群（建议顺序）
 
@@ -224,6 +233,7 @@ docker compose --profile with-vip up -d
   4. 若未先清成员，也可在每台执行 `./scripts/fix-patroni-connect-address.sh`（先 Leader 所在节点，再其他），但若 Patroni 不覆盖旧 key，需先执行步骤 1。
 - **Patroni 报错 "http://:2379"、"No host specified"**：说明容器内 `PATRONI_ETCD3_HOSTS` 为空或格式错误。**每台节点的 .env 必须包含 NODE1_IP、NODE2_IP、NODE3_IP**（与 .env.example 一致，三台机器的这三项完全一致），否则 `gen-patroni.sh` 会生成空的 etcd 列表。处理：1）确认本机 .env 有 `NODE1_IP=192.168.0.152`、`NODE2_IP=...`、`NODE3_IP=...`；2）在本机执行 `./scripts/bootstrap.sh`（或 `./scripts/gen-patroni.sh`）重新生成 `patroni/patroni.env`；3）检查 `cat patroni/patroni.env` 应包含 `PATRONI_ETCD3_HOSTS=192.168.0.152:2379,192.168.0.153:2379,192.168.0.154:2379`；4）重启 Patroni：`docker compose up -d --force-recreate patroni`。
 - **etcd 中 conn_url 一直为 172.18.x**：compose 中 etcd、patroni 使用 **端口映射 + bridge**，通过环境变量将 `PATRONI_POSTGRESQL_CONNECT_ADDRESS`、`PATRONI_RESTAPI_CONNECT_ADDRESS` 设为 NODE_IP，注册到 etcd 的 conn_url 为宿主机地址。HAProxy、PGBouncer 通过 NODE*_IP 连各机 5432/8008。若曾用 host 网络，切到端口映射后需**重建** etcd 与 patroni：`docker compose up -d --force-recreate etcd patroni`。
+- **从节点 Patroni 日志出现 `WARNING: Exception happened during processing of request from ...`**：来自 Patroni REST API（Python socketserver），多为对方（HAProxy 健康检查或其它节点）在响应写完前关闭连接，触发 `Connection reset by peer` / `Broken pipe`。若完整 traceback 里是这类异常且集群主从、HAProxy 均正常，可视为**良性告警**，无需处理；若伴随 API 无响应或选主异常，再查网络/防火墙或升级 Patroni 版本。
 
 ### etcd "unhealthy cluster" / "failed to commit proposal: context deadline exceeded"
 

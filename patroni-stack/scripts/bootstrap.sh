@@ -12,6 +12,8 @@ echo "=== 生成 haproxy/haproxy.cfg ==="
 ./scripts/gen-haproxy.sh
 echo "=== 生成 keepalived/keepalived.conf ==="
 ./scripts/gen-keepalived.sh
+echo "=== 生成 pgbouncer/userlist.txt ==="
+./scripts/gen-pgbouncer.sh
 echo "=== 创建数据目录 ==="
 mkdir -p data/etcd data/pg
 chmod 777 data/etcd data/pg 2>/dev/null || true

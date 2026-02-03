@@ -1,0 +1,45 @@
+FROM patroni:v4.1.0
+
+USER root
+
+# 1. 安装构建工具和必要的开发库
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        curl \
+        pkg-config \
+        # 核心修复：添加 ICU 开发库
+        libicu-dev \
+        libcurl4-openssl-dev \
+        postgresql-server-dev-17 \
+        postgresql-contrib-17 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. 编译安装第三方插件
+RUN set -e; \
+    export PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config; \
+    \
+    # 编译 pg_net
+    echo "--- Building pg_net ---"; \
+    git clone --branch v0.20.0 https://github.com/supabase/pg_net.git /tmp/pg_net; \
+    cd /tmp/pg_net && make PG_CONFIG=$PG_CONFIG && make install PG_CONFIG=$PG_CONFIG; \
+    \
+    # 编译 pg_cron
+    echo "--- Building pg_cron ---"; \
+    git clone https://github.com/citusdata/pg_cron.git /tmp/pg_cron; \
+    cd /tmp/pg_cron && make PG_CONFIG=$PG_CONFIG && make install PG_CONFIG=$PG_CONFIG; \
+    \
+    # 编译 plsh
+    echo "--- Building plsh ---"; \
+    git clone https://github.com/petere/plsh.git /tmp/plsh; \
+    cd /tmp/plsh && make PG_CONFIG=$PG_CONFIG && make install PG_CONFIG=$PG_CONFIG; \
+    \
+    # 最终验证
+    ls /usr/lib/postgresql/17/lib/pg_net.so; \
+    ls /usr/lib/postgresql/17/lib/pg_cron.so; \
+    ls /usr/lib/postgresql/17/lib/plsh.so; \
+    \
+    rm -rf /tmp/*
+
+USER postgres
+ENTRYPOINT ["/bin/sh", "/entrypoint.sh"]

@@ -27,6 +27,9 @@ set -a
 source .env
 set +a
 
+mkdir -p data/pg
+sudo chown -R 999:999 data/pg
+
 # 按节点设置 etcd：Node1 先以单节点集群启动，再 member add 其余节点，避免三节点同时 state=new 相互等待死锁
 if [ "$NODE_ID" = "1" ]; then
   export ETCD_INITIAL_CLUSTER_STATE=new
