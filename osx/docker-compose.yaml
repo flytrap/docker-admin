@@ -1,0 +1,32 @@
+version: '3'
+services:
+  osx:
+    container_name: osx
+    image: sickcodes/docker-osx:latest
+    privileged: true
+    restart: always
+    environment:
+      - DISPLAY=${DISPLAY:-:0.0}
+      - GENERATE_UNIQUE=true
+      - SHORTNAME=sonoma  # 选一个，建议 sonoma
+        # - CPU=Haswell-noTSX
+        # - CPU=Penryn
+      - CPU=host
+      - CPUID_FLAGS=kvm=on,vendor=GenuineIntel,+invtsc,vmware-cpuid-freq=on
+        # - EXTRA=-display none -vnc :0
+      - EXTRA=-display none -vnc :1
+      # 暂时删掉 MASTER_PLIST_URL，让它用内置模板
+      # network_mode: "host"
+    ports:
+      - "5901:5901"
+      - "10022:22"
+    cap_add:
+      - ALL
+    devices:
+      - /dev/kvm
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # 只挂载你需要持久化的核心文件
+      - ./data/BaseSystem.img:/home/arch/OSX-KVM/BaseSystem.img
+      - ./data/mac_hdd_ng.img:/home/arch/OSX-KVM/mac_hdd_ng.img
+
