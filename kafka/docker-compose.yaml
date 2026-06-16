@@ -3,7 +3,7 @@
 
 services:
   kafka-0:
-    image: docker.io/bitnami/kafka:4.1
+    image: docker.io/soldevelo/kafka:4.1
     container_name: kafka-0
     hostname: kafka-0
     ports:
@@ -31,7 +31,7 @@ services:
     volumes:
       - ./kafka_0_data:/bitnami/kafka
   kafka-1:
-    image: docker.io/bitnami/kafka:4.1
+    image: docker.io/soldevelo/kafka:4.1
     container_name: kafka-1
     hostname: kafka-1
     ports:
@@ -59,7 +59,7 @@ services:
     volumes:
       - ./kafka_1_data:/bitnami/kafka
   kafka-2:
-    image: docker.io/bitnami/kafka:4.1
+    image: docker.io/soldevelo/kafka:4.1
     container_name: kafka-2
     hostname: kafka-2
     ports:

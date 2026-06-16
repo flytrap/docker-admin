@@ -69,7 +69,7 @@ services:
     networks: [ pgnet ]
 
   pgpool:
-    image: bitnami/pgpool:4
+    image: soldevelo/pgpool:4
     container_name: pgpool
     restart: always
     environment:
